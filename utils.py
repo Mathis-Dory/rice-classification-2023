@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sb
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 from PIL import Image
 
 
@@ -22,7 +21,7 @@ def load_data(path="./dataset"):
         # Take only folders (because my images are splitted into 5 different folders) and ignore files
         if item.is_dir():
             # Foreach image but take only the first 1500 because lack of memory
-            for image in islice(os.scandir(f"{path}/{item.name}"), 1000):
+            for image in islice(os.scandir(f"{path}/{item.name}"), 500):
                 # Add the label of the image
                 if item.name == "Arborio":
                     y.append(0)
@@ -75,21 +74,3 @@ def show_samples(df):
         plt.title(title)
         plt.imshow(sample)
     plt.show()
-
-
-def imscatter(x, y, images, ax=None, zoom=0.1):
-    if ax is None:
-        ax = plt.gca()
-
-    for i, image in enumerate(images):
-
-        im = OffsetImage(image, zoom=zoom)
-        _x, _y = np.atleast_1d(x[i], y[i])
-        artists = []
-        for x0, y0 in zip(_x, _y):
-            ab = AnnotationBbox(im, (x0, y0), xycoords="data", frameon=False)
-            artists.append(ax.add_artist(ab))
-        ax.update_datalim(np.column_stack([_x, _y]))
-        ax.autoscale()
-
-    return artists
