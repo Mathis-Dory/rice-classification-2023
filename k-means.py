@@ -8,9 +8,9 @@ from matplotlib import pyplot as plt
 
 # Do nut trunc print
 from sklearn import metrics
-from sklearn.cluster import MiniBatchKMeans
+from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import RandomizedSearchCV, train_test_split
 
 from utils import load_data, show_samples
 
@@ -20,6 +20,14 @@ np.set_printoptions(threshold=sys.maxsize)
 ssl._create_default_https_context = ssl._create_unverified_context
 plt.rcParams.update({"font.size": 17})
 
+param_grid = {
+    "init": ["k-means++", "random"],
+    "n_init": [5, 10, 20, 50, "auto"],
+    "tol": [1e-4, 1e-5, 1e-6],
+    "algorithm": ["lloyd", "elkan"],
+    "max_iter": [100, 200, 300, 400, 500, 600, 800, 1000],
+}
+
 
 def main():
     dataset = PrepareDataset("./dataset/")
@@ -28,7 +36,7 @@ def main():
     x_train, x_test, y_train, y_test, idx_test = dataset.split(x, y)
     # Choose between only pca or resnet + pca
     x_train_features, x_test_features = dataset.exctract_features(
-        x_train, x_test, "resnet"
+        x_train, x_test, "pca"
     )
     kmean = KmeansModel(
         x_train_features,
@@ -38,6 +46,8 @@ def main():
         df["filepath"],
         idx_test,
     )
+    # Uncomment for tuning hyperparam
+    kmean.hyper_paramtuning(5)
     # I chose 5 because I already Know I have 5 labels
     predicted_labels, true_labels, model = kmean.fit_predict(5)
     kmean.evaluate_model(predicted_labels, true_labels, model)
@@ -58,7 +68,7 @@ class PrepareDataset:
         # Features extraction using pca
         if process == "pca":
 
-            pca = PCA(n_components=50)
+            pca = PCA(n_components=300)
             x_train = x_train.reshape(
                 -1, x_train.shape[1] * x_train.shape[2] * x_train.shape[3]
             )
@@ -73,7 +83,7 @@ class PrepareDataset:
         elif process == "resnet":
             # Load the ResNet50 model
             model = ResNet50(
-                weights="imagenet", include_top=False, input_shape=(224, 224, 3)
+                weights="imagenet", include_top=False, input_shape=(250, 250, 3)
             )
             # Preprocess the images
             x_train = preprocess_input(x_train)
@@ -86,7 +96,7 @@ class PrepareDataset:
             x_test = x_test.reshape(x_test.shape[0], -1)
 
             # Also apply pca here in order to be able to plot clusers and centroids after prediction because reesnet give high dimensional features
-            pca = PCA(n_components=50)
+            pca = PCA(n_components=300)
             x_train = pca.fit_transform(x_train)
             x_test = pca.fit_transform(x_test)
 
@@ -114,8 +124,24 @@ class KmeansModel:
         self.image_paths = image_paths
         self.x_test_indexes = x_test_indexes
 
+    def hyper_paramtuning(self, n):
+        kmeans = KMeans(n_clusters=n, random_state=42)
+        kmeans_random = RandomizedSearchCV(kmeans, param_grid, n_iter=50, cv=5)
+        kmeans_random.fit(self.x_train)
+        best_params = kmeans_random.best_params_
+        print(f"Best params: {best_params}")
+        # Best params: {'tol': 0.0001, 'n_init': 10, 'max_iter': 600, 'init': 'k-means++', 'algorithm': 'lloyd'}
+        return 0
+
     def fit_predict(self, n):
-        kmeans = MiniBatchKMeans(n_clusters=n, batch_size=500, random_state=42)
+        kmeans = KMeans(
+            n_clusters=n,
+            random_state=42,
+            tol=1e-4,
+            init="k-means++",
+            algorithm="lloyd",
+            n_init=10,
+        )
         kmeans.fit(self.x_train)
         pred_labels = kmeans.predict(self.x_test)
         true_labels = []
