@@ -22,21 +22,20 @@ def main():
     dataset = PrepareDataset("./dataset/")
     x, y, df = load_data()
     show_samples(df)
-    x_train, x_test, y_train, y_test = dataset.split(x, y)
+    x_train, x_test, y_train, y_test, idx_test = dataset.split(x, y)
     x_train_features, x_test_features, process = dataset.exctract_features(
         x_train, x_test, "pca"
     )
-    x_test_indexes = dataset.x_test_indexes
     kmean = KmeansModel(
         x_train_features,
         x_test_features,
         y_train,
         y_test,
         df["filepath"],
-        x_test_indexes,
+        idx_test,
     )
     # I chose 5 because I already Know I have 5 labels
-    kmean.fit_predict(5, process)
+    kmean.fit_predict(5)
 
 
 class PrepareDataset:
@@ -44,14 +43,15 @@ class PrepareDataset:
         self.data_folder = path_dataset_folder
 
     def split(self, x, y):
-        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
-        self.x_test_indexes = [i for i, x in enumerate(x_test)]
-        return x_train, x_test, y_train, y_test
+        x_train, x_test, y_train, y_test, idx_train, idx_test = train_test_split(
+            x, y, range(len(x)), test_size=0.3
+        )
+        return x_train, x_test, y_train, y_test, idx_test
 
     def exctract_features(self, x_train, x_test, process):
         if process == "pca":
 
-            pca = PCA(n_components=100)
+            pca = PCA(n_components=150)
             x_train = x_train.reshape(
                 -1, x_train.shape[1] * x_train.shape[2] * x_train.shape[3]
             )
@@ -82,7 +82,7 @@ class KmeansModel:
         self.image_paths = image_paths
         self.x_test_indexes = x_test_indexes
 
-    def fit_predict(self, n, process):
+    def fit_predict(self, n):
         kmeans = MiniBatchKMeans(n_clusters=n, batch_size=1000, random_state=42)
         kmeans.fit(self.x_train)
         pred_labels = kmeans.predict(self.x_test)
