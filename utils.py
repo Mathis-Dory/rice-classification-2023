@@ -21,7 +21,7 @@ def load_data(path="./dataset"):
         # Take only folders (because my images are splitted into 5 different folders) and ignore files
         if item.is_dir():
             # Foreach image but take only the first 1500 because lack of memory
-            for image in islice(os.scandir(f"{path}/{item.name}"), 500):
+            for image in islice(os.scandir(f"{path}/{item.name}"), 1000):
                 # Add the label of the image
                 if item.name == "Arborio":
                     y.append(0)
@@ -44,6 +44,7 @@ def load_data(path="./dataset"):
     X = np.asarray(X).reshape(-1, 250, 250, 3) / 255.0
     # Display proportion of labels
     sb.countplot(x=y)
+    plt.savefig("./images/dataset/dataset.png", dpi=75, format="png")
     plt.show()
 
     return X, np.asarray(y), df
@@ -72,5 +73,6 @@ def show_samples(df):
         random_row = df[df["label"] == label].sample()
         sample = Image.open(random_row["filepath"].values[0])
         plt.title(title)
+        plt.savefig("./images/dataset/samples.png", dpi=75, format="png")
         plt.imshow(sample)
     plt.show()

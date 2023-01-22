@@ -1,32 +1,25 @@
 import ssl
-import sys
 
 import numpy as np
-from keras.applications import ResNet50
-from keras.applications.resnet import preprocess_input
+import seaborn as sb
+from keras.applications import InceptionResNetV2
 from matplotlib import pyplot as plt
-
-# Do nut trunc print
 from sklearn import metrics
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
+from sklearn.manifold import TSNE
+from sklearn.model_selection import train_test_split
 
 from utils import load_data, show_samples
 
-np.set_printoptions(threshold=sys.maxsize)
-# Following line because import of VGG16 failed if I do not use it
-# https://stackoverflow.com/questions/47231408/downloading-resnet50-in-keras-generates-ssl-certificate-verify-failed
-ssl._create_default_https_context = ssl._create_unverified_context
 plt.rcParams.update({"font.size": 17})
 
-param_grid = {
-    "init": ["k-means++", "random"],
-    "n_init": [5, 10, 20, 50, "auto"],
-    "tol": [1e-4, 1e-5, 1e-6],
-    "algorithm": ["lloyd", "elkan"],
-    "max_iter": [100, 200, 300, 400, 500, 600, 800, 1000],
-}
+# Following line because import of pre trained model failed if I do not use it
+# https://stackoverflow.com/questions/47231408/downloading-resnet50-in-keras-generates-ssl-certificate-verify-failed
+ssl._create_default_https_context = ssl._create_unverified_context
+
+
+PROCESS = "pca"
 
 
 def main():
@@ -35,9 +28,7 @@ def main():
     show_samples(df)
     x_train, x_test, y_train, y_test, idx_test = dataset.split(x, y)
     # Choose between only pca or resnet + pca
-    x_train_features, x_test_features = dataset.exctract_features(
-        x_train, x_test, "pca"
-    )
+    x_train_features, x_test_features = dataset.exctract_features(x_train, x_test)
     kmean = KmeansModel(
         x_train_features,
         x_test_features,
@@ -46,8 +37,6 @@ def main():
         df["filepath"],
         idx_test,
     )
-    # Uncomment for tuning hyperparam
-    kmean.hyper_paramtuning(5)
     # I chose 5 because I already Know I have 5 labels
     predicted_labels, true_labels, model = kmean.fit_predict(5)
     kmean.evaluate_model(predicted_labels, true_labels, model)
@@ -62,13 +51,23 @@ class PrepareDataset:
         x_train, x_test, y_train, y_test, idx_train, idx_test = train_test_split(
             x, y, range(len(x)), test_size=0.3
         )
+        sb.countplot(x=y_test)
+        plt.title("Split in test data")
+        plt.savefig(f"./images/kmeans/test_split_{PROCESS}.png", dpi=75, format="png")
+        plt.show()
+
+        sb.countplot(x=y_train)
+        plt.title("Split in train data")
+        plt.savefig(f"./images/kmeans/train_split_{PROCESS}.png", dpi=75, format="png")
+        plt.show()
         return x_train, x_test, y_train, y_test, idx_test
 
-    def exctract_features(self, x_train, x_test, process):
+    def exctract_features(self, x_train, x_test):
         # Features extraction using pca
-        if process == "pca":
+        if PROCESS == "pca":
 
-            pca = PCA(n_components=300)
+            pca = PCA(n_components=150)
+            # Flatten (number_samples, number_features) to bot able to use pca
             x_train = x_train.reshape(
                 -1, x_train.shape[1] * x_train.shape[2] * x_train.shape[3]
             )
@@ -80,28 +79,25 @@ class PrepareDataset:
             x_train = pca.transform(x_train)
             x_test = pca.transform(x_test)
 
-        elif process == "resnet":
-            # Load the ResNet50 model
-            model = ResNet50(
+        elif PROCESS == "resnet":
+            # Load the RInceptionResNet50 model
+            model = InceptionResNetV2(
                 weights="imagenet", include_top=False, input_shape=(250, 250, 3)
             )
-            # Preprocess the images
-            x_train = preprocess_input(x_train)
-            x_test = preprocess_input(x_test)
             # Extract features from the images using the ResNet50 model
             x_train = model.predict(x_train)
             x_test = model.predict(x_test)
+
             # Flatten the features
             x_train = x_train.reshape(x_train.shape[0], -1)
             x_test = x_test.reshape(x_test.shape[0], -1)
 
-            # Also apply pca here in order to be able to plot clusers and centroids after prediction because reesnet give high dimensional features
-            pca = PCA(n_components=300)
-            x_train = pca.fit_transform(x_train)
-            x_test = pca.fit_transform(x_test)
-
+            # Apply t-SNE to reduce the dimensionality of the features
+            tsne = TSNE(n_components=2)
+            x_train = tsne.fit_transform(x_train)
+            x_test = tsne.fit_transform(x_test)
         else:
-            print("Please choose between pca or resnet extraction  ")
+            print("Please choose between pca or resnet extraction")
             return 0
 
         return x_train, x_test
@@ -124,23 +120,12 @@ class KmeansModel:
         self.image_paths = image_paths
         self.x_test_indexes = x_test_indexes
 
-    def hyper_paramtuning(self, n):
-        kmeans = KMeans(n_clusters=n, random_state=42)
-        kmeans_random = RandomizedSearchCV(kmeans, param_grid, n_iter=50, cv=5)
-        kmeans_random.fit(self.x_train)
-        best_params = kmeans_random.best_params_
-        print(f"Best params: {best_params}")
-        # Best params: {'tol': 0.0001, 'n_init': 10, 'max_iter': 600, 'init': 'k-means++', 'algorithm': 'lloyd'}
-        return 0
-
     def fit_predict(self, n):
         kmeans = KMeans(
             n_clusters=n,
             random_state=42,
-            tol=1e-4,
             init="k-means++",
             algorithm="lloyd",
-            n_init=10,
         )
         kmeans.fit(self.x_train)
         pred_labels = kmeans.predict(self.x_test)
@@ -151,11 +136,7 @@ class KmeansModel:
         for i, label in enumerate(pred_labels):
             clusters[label].append(i)
 
-        # for each cluster
-        # Plot the first 40 images of each cluster
-        i = 0
-        for cluster in clusters:
-            i += 1
+        for i, cluster in enumerate(clusters, start=1):
             fig, axes = plt.subplots(4, 10, figsize=(30, 30))
 
             for j, idx in enumerate(cluster):
@@ -170,6 +151,11 @@ class KmeansModel:
                 true_labels.append(self.y_test[idx])
             fig.suptitle(f"Cluster number: {i}")
             fig.tight_layout()
+            plt.savefig(
+                f"./images/kmeans/prediction_sample_cluster{i}_{PROCESS}.png",
+                dpi=75,
+                format="png",
+            )
             plt.show()
 
         return pred_labels, true_labels, kmeans
@@ -189,8 +175,38 @@ class KmeansModel:
             )
         plt.scatter(centroids[:, 0], centroids[:, 1], s=80, color="black", marker="x")
         plt.legend()
+        plt.savefig(
+            f"./images/kmeans/clusters_centroids_{PROCESS}.png", dpi=75, format="png"
+        )
+        plt.show()
+
+        f, ax = plt.subplots(1, 1, figsize=(30, 30))
+        metrics.ConfusionMatrixDisplay.from_predictions(
+            true_labels,
+            predicted_labels,
+            ax=ax,
+            normalize=None,
+        )
+        plt.title("Confusion matrix", fontsize=28)
+        plt.ylabel("True label", fontsize=25)
+        plt.xlabel("Predicted label", fontsize=25)
+        tick_marks = np.arange(5)
+        plt.xticks(tick_marks, range(1, 6))
+        plt.yticks(tick_marks, range(1, 6))
+        plt.savefig(
+            f"./images/kmeans/confusion_matrix_{PROCESS}.png", dpi=75, format="png"
+        )
         plt.show()
 
 
 if __name__ == "__main__":
     main()
+
+
+# Score for resnet:
+# Accuracy: 0.202
+# Silhouette score: 0.30260757
+#
+# Score for pca:
+# Accuracy: 0.20466666666666666
+# Silhouette score: 0.1649423398024018
