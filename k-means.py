@@ -66,7 +66,7 @@ class PrepareDataset:
         # Features extraction using pca
         if PROCESS == "pca":
 
-            pca = PCA(n_components=150)
+            pca = PCA(n_components=50)
             # Flatten (number_samples, number_features) to bot able to use pca
             x_train = x_train.reshape(
                 -1, x_train.shape[1] * x_train.shape[2] * x_train.shape[3]
