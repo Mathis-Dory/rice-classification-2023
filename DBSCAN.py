@@ -37,7 +37,7 @@ def main():
         df["filepath"],
         idx_test,
     )
-    predicted_labels, true_labels, model = kmean.fit_predict()
+    predicted_labels, true_labels, model = kmean.fit_predict(eps=0.001, min_samples=40)
     kmean.evaluate_model(predicted_labels, true_labels, model)
 
 
@@ -123,8 +123,7 @@ class DBSCANModel:
     def fit_predict(self, eps, min_samples):
         dbscan = DBSCAN(eps=eps, min_samples=min_samples)
         dbscan.fit(self.x_train)
-        prediction = dbscan.fit_predict(self.x_test)
-        pred_labels = prediction.labels_
+        pred_labels = dbscan.fit_predict(self.x_test)
         number_of_clusters = len(np.unique(pred_labels)) - (
             1 if -1 in np.unique(pred_labels) else 0
         )

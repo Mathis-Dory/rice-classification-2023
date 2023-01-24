@@ -66,7 +66,7 @@ class PrepareDataset:
         # Features extraction using pca
         if PROCESS == "pca":
 
-            pca = PCA(n_components=50)
+            pca = PCA(n_components=50, random_state=42)
             # Flatten (number_samples, number_features) to bot able to use pca
             x_train = x_train.reshape(
                 -1, x_train.shape[1] * x_train.shape[2] * x_train.shape[3]
@@ -80,7 +80,7 @@ class PrepareDataset:
             x_test = pca.transform(x_test)
 
         elif PROCESS == "resnet":
-            # Load the RInceptionResNet50 model
+            # Load the InceptionResNet50 model
             model = InceptionResNetV2(
                 weights="imagenet", include_top=False, input_shape=(250, 250, 3)
             )
@@ -93,7 +93,7 @@ class PrepareDataset:
             x_test = x_test.reshape(x_test.shape[0], -1)
 
             # Apply t-SNE to reduce the dimensionality of the features
-            tsne = TSNE(n_components=2)
+            tsne = TSNE(n_components=2, random_state=42)
             x_train = tsne.fit_transform(x_train)
             x_test = tsne.fit_transform(x_test)
         else:
@@ -121,12 +121,7 @@ class KmeansModel:
         self.x_test_indexes = x_test_indexes
 
     def fit_predict(self, n):
-        kmeans = KMeans(
-            n_clusters=n,
-            random_state=42,
-            init="k-means++",
-            algorithm="lloyd",
-        )
+        kmeans = KMeans()
         kmeans.fit(self.x_train)
         pred_labels = kmeans.predict(self.x_test)
         true_labels = []
@@ -204,9 +199,9 @@ if __name__ == "__main__":
 
 
 # Score for resnet:
-# Accuracy: 0.202
-# Silhouette score: 0.30260757
+# Accuracy: 0.20466666666666666
+# Silhouette score: 0.30071273
 #
 # Score for pca:
-# Accuracy: 0.20466666666666666
-# Silhouette score: 0.1649423398024018
+# Accuracy: 0.21866666666666668
+# Silhouette score: 0.18713573455489102
